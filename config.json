@@ -1,0 +1,18 @@
+{
+  "shopify": {
+    "shop_domain": "cvz1fy-qm.myshopify.com",
+    "admin_store_handle": "cvz1fy-qm",
+    "api_version": "2026-01",
+    "shop_label": "North Edge Standard"
+  },
+  "chatwork": {
+    "room_id": "440491264",
+    "mention_account_ids": ["2238339"],
+    "_mention_note": "ここに入れたアカウントIDへ[To:]メンションを付けて通知音/バッジを鳴らす。複数可。"
+  },
+  "active_hours": {
+    "start": 8,
+    "end": 22,
+    "_note": "JST。時間外(深夜)の注文は翌朝8時台のチェックでまとめて通知される（差分検知なので取りこぼし無し）。"
+  }
+}
