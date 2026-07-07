@@ -6,7 +6,7 @@
     "shop_label": "North Edge Standard"
   },
   "chatwork": {
-    "room_id": "440491264",
+    "room_id": "441869132",
     "mention_account_ids": ["2238339"],
     "_mention_note": "ここに入れたアカウントIDへ[To:]メンションを付けて通知音/バッジを鳴らす。複数可。"
   },
