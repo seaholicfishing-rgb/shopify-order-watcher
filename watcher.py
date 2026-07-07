@@ -193,7 +193,16 @@ def chatwork_post(room_id, body, token):
         return json.loads(r.read())
 
 
+def load_local_secrets():
+    """ローカル実行用: config.local.json(gitignore済み)の値を環境変数の初期値にする。
+    GitHub Actions上では環境変数(Secrets)が優先される。"""
+    local = load_json(os.path.join(BASE_DIR, "config.local.json"), {})
+    for key, value in (local or {}).items():
+        os.environ.setdefault(key, str(value))
+
+
 def main():
+    load_local_secrets()
     init_mode = "--init" in sys.argv
     test_mode = "--test" in sys.argv
 
