@@ -32,7 +32,8 @@ jobs:
 
       - name: Run watcher
         env:
-          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
           CHATWORK_TOKEN: ${{ secrets.CHATWORK_TOKEN }}
           FORCE_RUN: ${{ github.event.inputs.force == 'true' && '1' || '' }}
         run: python watcher.py

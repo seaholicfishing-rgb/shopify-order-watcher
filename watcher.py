@@ -80,6 +80,34 @@ def save_json(path, data):
         f.write("\n")
 
 
+def get_shopify_token(cfg):
+    """アクセストークンを取得する。
+    新方式(Dev Dashboardアプリ): SHOPIFY_CLIENT_ID/SECRET をトークンに交換(24時間有効。毎回取り直すので期限切れの心配なし)
+    旧方式(shpat_トークン直指定): SHOPIFY_TOKEN があればそれをそのまま使う
+    """
+    direct = os.environ.get("SHOPIFY_TOKEN")
+    if direct:
+        return direct
+    client_id = os.environ.get("SHOPIFY_CLIENT_ID")
+    client_secret = os.environ.get("SHOPIFY_CLIENT_SECRET")
+    if not (client_id and client_secret):
+        log("環境変数 SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET (または SHOPIFY_TOKEN) がありません。")
+        sys.exit(1)
+    url = f"https://{cfg['shopify']['shop_domain']}/admin/oauth/access_token"
+    data = urllib.parse.urlencode({
+        "grant_type": "client_credentials",
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }).encode()
+    req = urllib.request.Request(url, data=data)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        payload = json.loads(r.read())
+    token = payload.get("access_token")
+    if not token:
+        raise RuntimeError(f"トークン交換に失敗: {payload}")
+    return token
+
+
 def fetch_orders(cfg, token):
     sp = cfg["shopify"]
     url = f"https://{sp['shop_domain']}/admin/api/{sp['api_version']}/graphql.json"
@@ -185,11 +213,6 @@ def main():
         log("接続テスト送信OK")
         return
 
-    shopify_token = os.environ.get("SHOPIFY_TOKEN")
-    if not shopify_token:
-        log("環境変数 SHOPIFY_TOKEN がありません。")
-        sys.exit(1)
-
     # 稼働時間ガード（JST）。差分検知なので時間外の注文は翌朝まとめて通知される
     if not init_mode and os.environ.get("FORCE_RUN") != "1":
         ah = cfg.get("active_hours", {})
@@ -197,6 +220,8 @@ def main():
         if not (ah.get("start", 0) <= hour <= ah.get("end", 23)):
             log(f"稼働時間外（JST {hour}時）のため何もせず終了。")
             return
+
+    shopify_token = get_shopify_token(cfg)
 
     state = load_json(STATE_PATH, {"seen_order_ids": []})
     seen_ids = state.get("seen_order_ids", [])

@@ -17,21 +17,28 @@ Shopify（North Edge Standard）に**新しい注文が入ったらChatworkへ�
 
 ## セットアップ
 
-### 1. Shopify カスタムアプリを作ってトークンを取得
+### 1. Shopify Dev Dashboard でアプリを作って Client ID / Secret を取得
 
-1. [Shopify管理画面](https://admin.shopify.com/store/cvz1fy-qm) → **設定** → **アプリと販売チャネル** → **アプリを開発**（初回は「カスタムアプリ開発を許可」）
-2. **アプリを作成** → 名前 `order-watcher`
-3. **Admin APIスコープを設定** → `read_orders` にチェック → 保存
-4. **アプリをインストール** → **Admin APIアクセストークン**（`shpat_...`）を表示してコピー
-   （⚠️ 一度しか表示されないので注意）
+このストアは旧「カスタムアプリ」が廃止され新方式（Dev Dashboard）に移行済み。
+トークン(`shpat_`)は画面に表示されず、**Client ID / Client Secret を実行時にトークンへ交換する**
+（client credentials grant。アプリとストアが同じ組織のときだけ使える方式。トークンは24時間有効・毎回取り直す）。
+
+1. [Dev Dashboard](https://dev.shopify.com) → **アプリ** → **アプリを作成**（名前 `order-watcher`）
+2. アプリの設定で **Admin APIスコープ `read_orders`** を付与し、保護顧客データ(Protected customer data)のアクセスを設定
+3. バージョンを**リリース**し、ストア `cvz1fy-qm` に**インストール**
+4. アプリの **設定(Settings)** から **Client ID** と **Client secret** をコピー
 
 ### 2. GitHub リポジトリと Secrets
 
 ```
 gh repo create seaholicfishing-rgb/shopify-order-watcher --public --source . --push
-gh secret set SHOPIFY_TOKEN   # Shopifyのshpat_...トークン
-gh secret set CHATWORK_TOKEN  # Botアカウント(NES)のChatworkトークン
+gh secret set SHOPIFY_CLIENT_ID       # Dev DashboardアプリのClient ID
+gh secret set SHOPIFY_CLIENT_SECRET   # 同 Client secret
+gh secret set CHATWORK_TOKEN          # Botアカウント(NES)のChatworkトークン
 ```
+
+※ 旧方式の `shpat_` トークンが手に入る場合は、代わりに Secret `SHOPIFY_TOKEN` に入れれば
+そのまま使われる（watcher.pyが両対応）。
 
 Publicなのは Actions 無料枠を消費しないため（chatwork-to-wpと同じ判断）。
 秘密情報はコードに含めず GitHub Secrets のみ。
@@ -41,7 +48,8 @@ Publicなのは Actions 無料枠を消費しないため（chatwork-to-wpと同
 ローカルで:
 
 ```
-set SHOPIFY_TOKEN=shpat_...
+set SHOPIFY_CLIENT_ID=...
+set SHOPIFY_CLIENT_SECRET=...
 python watcher.py --init
 git add state.json && git commit -m "init state" && git push
 ```
