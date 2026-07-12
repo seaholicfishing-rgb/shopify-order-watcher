@@ -1,6 +1,10 @@
 {
   "seen_order_ids": [
-    "gid://shopify/Order/6816806338718"
+    "gid://shopify/Order/6816806338718",
+    "gid://shopify/Order/6816836419742",
+    "gid://shopify/Order/6816838484126",
+    "gid://shopify/Order/6816839139486",
+    "gid://shopify/Order/6816842416286"
   ],
-  "updated_at": "2026-07-12T20:06:41.359951+09:00"
+  "updated_at": "2026-07-12T20:43:21.289164+09:00"
 }
