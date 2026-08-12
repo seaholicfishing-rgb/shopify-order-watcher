@@ -165,12 +165,21 @@ def address_lines(a):
 def render_packing_slip(order):
     img = Image.new("RGB", (W, H), "white")
     d = ImageDraw.Draw(img)
-    f_title = ImageFont.truetype(FONT_PATH, 96)
-    f_h = ImageFont.truetype(FONT_PATH, 44)
-    f_b = ImageFont.truetype(FONT_PATH, 40)
-    f_s = ImageFont.truetype(FONT_PATH, 36)
 
-    black, gray = (20, 20, 20), (90, 90, 90)
+    def font(size, weight=500):
+        f = ImageFont.truetype(FONT_PATH, size)
+        try:
+            f.set_variation_by_axes([weight])
+        except Exception:
+            pass
+        return f
+
+    f_title = font(96, 600)
+    f_h = font(44, 700)
+    f_b = font(40, 500)
+    f_s = font(36, 500)
+
+    black, gray = (0, 0, 0), (70, 70, 70)
 
     # header
     d.text((MARGIN, 260), "NORTH EDGE STANDARD", font=f_title, fill=black)
@@ -321,7 +330,7 @@ def main():
     state = load_json(STATE_PATH, {"processed": []})
     processed = set(state["processed"])
 
-    new_orders = [o for o in orders if o["id"] not in processed]
+    new_orders = orders if dry else [o for o in orders if o["id"] not in processed]
     if init_only:
         state["processed"] = sorted(processed | {o["id"] for o in orders})
         save_json(STATE_PATH, state)
