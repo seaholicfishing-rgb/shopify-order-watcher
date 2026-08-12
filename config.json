@@ -1,18 +1,25 @@
 {
-  "shopify": {
-    "shop_domain": "cvz1fy-qm.myshopify.com",
-    "admin_store_handle": "cvz1fy-qm",
-    "api_version": "2026-01",
-    "shop_label": "North Edge Standard"
-  },
-  "chatwork": {
-    "room_id": "441869132",
-    "mention_account_ids": ["2238339"],
-    "_mention_note": "ここに入れたアカウントIDへ[To:]メンションを付けて通知音/バッジを鳴らす。複数可。"
-  },
-  "active_hours": {
-    "start": 8,
-    "end": 22,
-    "_note": "JST。時間外(深夜)の注文は翌朝8時台のチェックでまとめて通知される（差分検知なので取りこぼし無し）。"
-  }
+    "shopify":  {
+                    "shop_domain":  "cvz1fy-qm.myshopify.com",
+                    "admin_store_handle":  "cvz1fy-qm",
+                    "api_version":  "2026-01",
+                    "shop_label":  "North Edge Standard"
+                },
+    "chatwork":  {
+                     "room_id":  "441869132",
+                     "mention_account_ids":  [
+                                                 "2238339"
+                                             ],
+                     "_mention_note":  "ここに入れたアカウントIDへ[To:]メンションを付けて通知音/バッジを鳴らす。複数可。"
+                 },
+    "active_hours":  {
+                         "start":  8,
+                         "end":  22,
+                         "_note":  "JST。時間外(深夜)の注文は翌朝8時台のチェックでまとめて通知される（差分検知なので取りこぼし無し）。"
+                     },
+    "autoflow":  {
+                     "family_room_id":  "442712906",
+                     "mention_account_id":  "2238339",
+                     "_note":  "family_room_id=North Edge 発送データ共有(奥さん用)。新規注文の明細表PDFを自動投稿し、mention宛に送り状購入を依頼する。"
+                 }
 }
