@@ -53,7 +53,7 @@ PREF_JA = {
 ORDERS_QUERY = """
 {
   orders(first: 10, sortKey: CREATED_AT, reverse: true,
-         query: "financial_status:paid fulfillment_status:unshipped status:open") {
+         query: "%QUERY%") {
     nodes {
       id name createdAt
       taxesIncluded
@@ -118,12 +118,14 @@ def get_shopify_token(cfg):
         return json.loads(r.read())["access_token"]
 
 
-def fetch_open_orders(cfg, token):
+def fetch_open_orders(cfg, token, search=None):
+    """search=None なら「支払い済み・未発送」。注文番号指定なら name:#1106 等"""
+    q = search or "financial_status:paid fulfillment_status:unshipped status:open"
     sp = cfg["shopify"]
     url = f"https://{sp['shop_domain']}/admin/api/{sp['api_version']}/graphql.json"
     req = urllib.request.Request(
         url,
-        data=json.dumps({"query": ORDERS_QUERY}).encode("utf-8"),
+        data=json.dumps({"query": ORDERS_QUERY.replace("%QUERY%", q)}).encode("utf-8"),
         headers={"Content-Type": "application/json", "X-Shopify-Access-Token": token})
     with urllib.request.urlopen(req, timeout=30) as r:
         data = json.loads(r.read())
@@ -213,17 +215,33 @@ def render_packing_slip(order):
     d.text((col_amt, y), "金額 / AMOUNT", font=f_s, fill=black, anchor="ra")
     y += 100
 
+    item_x = MARGIN + 120
+    item_w = col_qty - item_x - 120  # 数量列に食い込まないための折り返し幅
+
+    def wrap(text, font):
+        """日本語は単語境界がないので1文字ずつ幅を測って折り返す"""
+        lines, cur = [], ""
+        for ch in text:
+            if d.textlength(cur + ch, font=font) > item_w and cur:
+                lines.append(cur)
+                cur = ch
+            else:
+                cur += ch
+        if cur:
+            lines.append(cur)
+        return lines
+
     for it in order["lineItems"]["nodes"]:
-        title = it["title"]
+        lines = wrap(it["title"], f_b)
         if it.get("variantTitle"):
-            title += f'\n{it["variantTitle"]}'
-        d.multiline_text((MARGIN + 120, y), title, font=f_b, fill=black, spacing=18)
+            lines.append(it["variantTitle"])
+        d.multiline_text((item_x, y), "\n".join(lines), font=f_b, fill=black, spacing=18)
         d.text((col_qty, y), f'{it["quantity"]}個', font=f_b, fill=black, anchor="ra")
         d.text((col_price, y), yen(it["originalUnitPriceSet"]["shopMoney"]["amount"]),
                font=f_b, fill=black, anchor="ra")
         d.text((col_amt, y), yen(it["discountedTotalSet"]["shopMoney"]["amount"]),
                font=f_b, fill=black, anchor="ra")
-        y += 170
+        y += max(2, len(lines)) * 62 + 46
 
     y += 30
     d.line([(MARGIN, y), (W - MARGIN, y)], fill=black, width=6)
@@ -319,6 +337,11 @@ def main():
 
     init_only = "--init" in sys.argv
     dry = "--dry" in sys.argv
+    # --order 1106 1107 … 発送済みでも指定の注文を出し直す(差分検知を無視)
+    redo = []
+    if "--order" in sys.argv:
+        redo = [a.lstrip("#") for a in sys.argv[sys.argv.index("--order") + 1:]
+                if not a.startswith("--")]
 
     chatwork_token = get_env("CHATWORK_TOKEN")
     if not dry and not chatwork_token:
@@ -326,11 +349,12 @@ def main():
         sys.exit(1)
 
     token = get_shopify_token(cfg)
-    orders = fetch_open_orders(cfg, token)
+    search = " OR ".join(f"name:#{n}" for n in redo) if redo else None
+    orders = fetch_open_orders(cfg, token, search)
     state = load_json(STATE_PATH, {"processed": []})
     processed = set(state["processed"])
 
-    new_orders = orders if dry else [o for o in orders if o["id"] not in processed]
+    new_orders = orders if (dry or redo) else [o for o in orders if o["id"] not in processed]
     if init_only:
         state["processed"] = sorted(processed | {o["id"] for o in orders})
         save_json(STATE_PATH, state)
