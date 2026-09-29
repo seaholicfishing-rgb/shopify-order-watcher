@@ -85,6 +85,20 @@ def _norm(t):
     return t
 
 
+_KNUM = "〇一二三四五六七八九"
+
+
+def _kanji_num_to_arabic(t):
+    """町域の漢数字(〜九十九)をアラビア数字に直す。例: 北二十条東 → 北20条東"""
+    def conv(m):
+        k = m.group(0)
+        if "十" in k:
+            a, _, b = k.partition("十")
+            return str((_KNUM.index(a) if a else 1) * 10 + (_KNUM.index(b) if b else 0))
+        return "".join(str(_KNUM.index(c)) for c in k)
+    return re.sub(r"[一二三四五六七八九十〇]+", conv, t)
+
+
 def _strip_town(addr1, town):
     """住所欄から町域部分を取り除く(半角/全角の数字ゆれも吸収)"""
     t = town
@@ -142,6 +156,15 @@ def judge(o):
             action = "ASK"
             reasons.append(f"町域「{town}」に数字が入る(ヤマトが弾く既知パターン)")
             risk = {"市区町村": want_city, "住所": _strip_town(addr1, town)}
+        else:
+            # (d) 正式な町域は漢数字(北二十条東)なのに、客がアラビア数字(北20条東)で書いている
+            #     2026-09-29 #1121 で発生。漢数字で書かれていれば通る(#1117 北十六条東)
+            ta = _kanji_num_to_arabic(town)
+            if town and ta != town and town not in joined and ta in _norm(joined):
+                action = "ASK"
+                reasons.append(f"町域「{town}」がアラビア数字「{ta}」で書かれている(ヤマトが弾く)")
+                rest = _norm(addr1).split(ta, 1)[-1]
+                risk = {"市区町村": want_city, "住所": rest}
 
     dt = datetime.fromisoformat(o["createdAt"].replace("Z", "+00:00")).astimezone(JST)
     return {
