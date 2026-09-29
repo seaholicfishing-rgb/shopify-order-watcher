@@ -21,7 +21,8 @@ $tabs = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
 $cur = ""
 foreach ($t in $tabs) { $s = $null; if ($t.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$s)) { if ($s.Current.IsSelected) { $cur = $t.Current.Name } } }
 if ($Name) { $target = $tabs | Where-Object { $_.Current.Name -like "*$Name*" } | Select-Object -First 1 }
-else { $target = $tabs | Where-Object { $_.Current.Name -like "*自動発送*" -and ($_.Current.Name -like "*Shopify*" -or $_.Current.Name -like "*B2_OKURIJYO*" -or $_.Current.Name -like "*amazonaws*") } | Select-Object -First 1 }
+else { $target = $tabs | Where-Object { $_.Current.Name -like "CLAUDE-WORK*" } | Select-Object -First 1
+  if (-not $target) { $target = $tabs | Where-Object { $_.Current.Name -like "*自動発送*" -and ($_.Current.Name -like "*Shopify*" -or $_.Current.Name -like "*B2_OKURIJYO*" -or $_.Current.Name -like "*amazonaws*") } | Select-Object -First 1 } }
 $p = $null
 if ($target -and $target.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$p)) { $p.Select(); $r = "OK" } else { $r = "NG(タブが見つからない)" }
 if (-not $Name) {
