@@ -63,3 +63,12 @@
 ## メンテ時間の実際（2026-10-01 05:50 に確認）
 画面には「深夜1時〜朝7時は送り状の購入・印刷ができません」と出るが、**05:50に購入もPDF発行も通った**。
 ヤマト側の受付が止まるのは印刷後の集荷系だけの可能性がある。以後、メンテ時間帯でもまず試してよい（失敗したら7時以降に再実行）。
+
+## 送り状URLが「REDACTED」で見えないとき（2026-10-05〜）
+拡張がタブのURLのクエリ部分を伏せるようになり、tabs_context からS3の署名付きURLを取れなくなった。
+代わりにPDFタブの中でJSに取らせる（同一オリジンなので fetch が通る）:
+1. PDFタブに対して javascript_tool:
+   `const r=await fetch(location.href); const b=await r.blob(); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='okurijo_<注文番号>_raw.pdf'; document.body.appendChild(a); a.click(); 'ok'`
+   → `C:\Users\sekai\Downloads\okurijo_<注文番号>_raw.pdf` に落ちる（数秒はEdgeが掴んでいるので cp で取り、rm は後回し）
+2. `python label_fetch.py <注文番号> C:\Users\sekai\Downloads\okurijo_<注文番号>_raw.pdf`（ローカルパスも受け付けるようにした）
+3. 以降は従来どおり post_chat.py で投稿

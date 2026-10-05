@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """送り状PDF(S3の署名付きURL)を取得し、どこでも印刷できる画像PDFに変換する。
-  python label_fetch.py <名前(例 1117 / 1118_竿)> <URL>
+  python label_fetch.py <名前(例 1117 / 1118_竿)> <URL または ローカルPDFのパス>
 保存先: ~/Downloads/<注文番号>_発送セット/送り状_<名前>.pdf
 ヤマトB2のPDFはAdobe以外だと白紙になるため、300dpiで画像化して作り直す。
 URLは curl で取る(PowerShellのInvoke-WebRequestは // を潰して署名エラーになる)。"""
@@ -14,7 +14,10 @@ d = os.path.join(os.path.expanduser("~"), "Downloads", f"{order}_発送セット
 os.makedirs(d, exist_ok=True)
 raw = os.path.join(d, f"送り状_{name}_元データ.pdf")
 out = os.path.join(d, f"送り状_{name}.pdf")
-subprocess.run(["curl", "-sS", "-o", raw, url], check=True)
+if os.path.isfile(url):          # 署名付きURLが取れないときは、ブラウザで落としたPDFのパスを渡す
+    import shutil; shutil.copy(url, raw)
+else:
+    subprocess.run(["curl", "-sS", "-o", raw, url], check=True)
 if open(raw, "rb").read(5) != b"%PDF-":
     sys.exit("PDFではない(URL期限切れの可能性): " + open(raw, "rb").read(200).decode("utf-8", "replace"))
 imgs = [p.render(scale=300 / 72).to_pil().convert("RGB") for p in pdfium.PdfDocument(raw)]
