@@ -18,6 +18,7 @@ watcher.py と同じ差分検知方式(autoflow_state.json)。何度動いても
 import io
 import json
 import os
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -52,10 +53,10 @@ PREF_JA = {
 
 ORDERS_QUERY = """
 {
-  orders(first: 10, sortKey: CREATED_AT, reverse: true,
+  orders(first: 20, sortKey: CREATED_AT, reverse: true,
          query: "%QUERY%") {
     nodes {
-      id name createdAt
+      id name createdAt cancelledAt displayFulfillmentStatus
       taxesIncluded
       totalPriceSet { shopMoney { amount } }
       subtotalPriceSet { shopMoney { amount } }
@@ -118,9 +119,21 @@ def get_shopify_token(cfg):
         return json.loads(r.read())["access_token"]
 
 
+LOOKBACK_DAYS = 14
+
+
 def fetch_open_orders(cfg, token, search=None):
-    """search=None なら「支払い済み・未発送」。注文番号指定なら name:#1106 等"""
-    q = search or "financial_status:paid fulfillment_status:unshipped status:open"
+    """search=None なら「直近14日の支払い済み注文」(キャンセル除く)。注文番号指定なら name:#1106 等
+
+    以前は fulfillment_status:unshipped status:open も条件にしていたが、
+    銀行振込で「支払い済みにマーク」→数分後に送り状発行(=発送済み・自動アーカイブ)となると
+    15分間隔の実行が「支払い済み・未発送」の瞬間を一度も見られず明細表が出ない事故が起きた(2026-11-06 #1135)。
+    発送済みでも未処理なら投稿する。重複は autoflow_state.json とChatwork既投稿チェックで防ぐ。
+    """
+    if not search:
+        since = (datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        search = f"financial_status:paid created_at:>={since}"
+    q = search
     sp = cfg["shopify"]
     url = f"https://{sp['shop_domain']}/admin/api/{sp['api_version']}/graphql.json"
     req = urllib.request.Request(
@@ -131,7 +144,7 @@ def fetch_open_orders(cfg, token, search=None):
         data = json.loads(r.read())
     if data.get("errors") and not data.get("data"):
         raise RuntimeError(f"GraphQLエラー: {data['errors']}")
-    return data["data"]["orders"]["nodes"]
+    return [o for o in data["data"]["orders"]["nodes"] if not o.get("cancelledAt")]
 
 
 # ---------- 明細表PDF生成 (A4 300dpi) ----------
@@ -314,6 +327,25 @@ def chatwork_upload(room_id, token, filename, content, message):
         return json.loads(r.read())
 
 
+def chatwork_posted_orders(room_id, token):
+    """家族ルームの直近メッセージから、明細表を投稿済みの注文番号(#1135 等)を集める。
+    ローカル手動実行(--order)とクラウド実行で state が別々でも二重投稿しないための保険。"""
+    try:
+        req = urllib.request.Request(
+            f"{CHATWORK_API}/rooms/{room_id}/messages?force=1",
+            headers={"X-ChatWorkToken": token})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            raw = r.read()
+        msgs = json.loads(raw) if raw.strip() else []
+    except Exception as e:  # 取れなくても本処理は止めない(stateだけで判定)
+        log(f"  Chatwork既投稿チェック失敗(無視): {e}")
+        return set()
+    names = set()
+    for m in msgs:
+        names.update(re.findall(r"\[title\](#\d+) .*?の明細表", m.get("body", "")))
+    return names
+
+
 def chatwork_post(room_id, body_text, token):
     data = urllib.parse.urlencode({"body": body_text}).encode()
     req = urllib.request.Request(
@@ -355,6 +387,16 @@ def main():
     processed = set(state["processed"])
 
     new_orders = orders if (dry or redo) else [o for o in orders if o["id"] not in processed]
+    if new_orders and not (dry or redo or init_only):
+        already = chatwork_posted_orders(family_room, chatwork_token)
+        skipped = [o for o in new_orders if o["name"] in already]
+        for o in skipped:
+            log(f"{o['name']} は家族ルームに明細表が投稿済み → 処理済み扱い(投稿なし)")
+            processed.add(o["id"])
+        if skipped:
+            state["processed"] = sorted(processed)
+            save_json(STATE_PATH, state)
+        new_orders = [o for o in new_orders if o["name"] not in already]
     if init_only:
         state["processed"] = sorted(processed | {o["id"] for o in orders})
         save_json(STATE_PATH, state)
@@ -362,7 +404,7 @@ def main():
         return
 
     if not new_orders:
-        log("新規の支払い済み・未発送注文はありません。")
+        log("新規の支払い済み注文はありません。")
         return
 
     for o in reversed(new_orders):  # 古い順に処理
@@ -392,13 +434,15 @@ def main():
                "送り状はこのあと別途届きます[/info]")
         chatwork_upload(family_room, chatwork_token, f"明細表_{name.lstrip('#')}.pdf", pdf, msg)
         if mention_id:
-            chatwork_post(
-                family_room,
-                f"[To:{mention_id}] 新規注文 {name} {cust}様（{items}・{total}）\n"
-                "明細表は自動投稿済み。送り状の購入をお願いします→ "
-                "https://admin.shopify.com/store/cvz1fy-qm/apps/shippingplus/shippings\n"
-                "購入できたらClaudeに「送り状回収して」でPDF化できます",
-                chatwork_token)
+            if o.get("displayFulfillmentStatus") == "FULFILLED":
+                body = (f"[To:{mention_id}] {name} {cust}様（{items}・{total}）の明細表を投稿しました\n"
+                        "※この注文はすでに発送済み(送り状発行済み)のため、送り状の購入は不要です")
+            else:
+                body = (f"[To:{mention_id}] 新規注文 {name} {cust}様（{items}・{total}）\n"
+                        "明細表は自動投稿済み。送り状の購入をお願いします→ "
+                        "https://admin.shopify.com/store/cvz1fy-qm/apps/shippingplus/shippings\n"
+                        "購入できたらClaudeに「送り状回収して」でPDF化できます")
+            chatwork_post(family_room, body, chatwork_token)
         processed.add(o["id"])
         state["processed"] = sorted(processed)
         save_json(STATE_PATH, state)
